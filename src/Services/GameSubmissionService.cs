@@ -37,7 +37,7 @@ namespace ELO.Services
         /// The player's rank change state (rank up, derank, none)
         /// The players new rank (if changed)
         /// </returns>
-        public List<(Player, int, Rank, RankChangeState, Rank)> UpdateTeamScoresAsync(Competition competition, Lobby lobby, GameResult game, Rank[] ranks, bool win, HashSet<ulong> userIds, Database db)
+        public List<(Player, int, Rank, RankChangeState, Rank)> UpdateTeamScoresAsync(Competition competition, Lobby lobby, GameResult game, Rank[] ranks, bool win, HashSet<ulong> userIds, HashSet<ulong> opponentIds, Database db)
         {
             var updates = new List<(Player, int, Rank, RankChangeState, Rank)>();
             foreach (var userId in userIds)
@@ -199,13 +199,13 @@ namespace ELO.Services
                 var team2 = db.GetTeamFull(game, 2);
                 if (winning_team == TeamSelection.team1)
                 {
-                    winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team1, db);
-                    loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team2, db);
+                    winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team1, team2, db);
+                    loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team2, team1, db);
                 }
                 else
                 {
-                    loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team1, db);
-                    winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team2, db);
+                    loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team1, team2, db);
+                    winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team2, team1, db);
                 }
 
                 var allUsers = new List<(Player, int, Rank, RankChangeState, Rank)>();
@@ -358,13 +358,13 @@ namespace ELO.Services
             List<(Player, int, Rank, RankChangeState, Rank)> loseList;
             if (winning_team == TeamSelection.team1)
             {
-                winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team1, db);
-                loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team2, db);
+                winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team1, team2, db);
+                loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team2, team1, db);
             }
             else
             {
-                loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team1, db);
-                winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team2, db);
+                loseList = UpdateTeamScoresAsync(competition, lobby, game, ranks, false, team1, team2, db);
+                winList = UpdateTeamScoresAsync(competition, lobby, game, ranks, true, team2, team1, db);
             }
 
             var allUsers = new List<(Player, int, Rank, RankChangeState, Rank)>();

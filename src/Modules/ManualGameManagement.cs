@@ -94,10 +94,11 @@ namespace ELO.Modules
         }
 
 
-        public virtual async Task UpdateTeamScoresAsync(bool win, HashSet<ulong> userIds)
+        public virtual async Task UpdateTeamScoresAsync(bool win, HashSet<ulong> userIds, HashSet<ulong> opponentIds)
         {
             using (var db = new Database())
             {
+                var useElo = true;
                 var competition = db.GetOrCreateCompetition(Context.Guild.Id);
                 var updates = new List<(Player, int, Rank, RankChangeState, Rank)>();
                 var ranks = db.Ranks.Where(x => x.GuildId == Context.Guild.Id).ToArray();
@@ -107,7 +108,33 @@ namespace ELO.Modules
                     Color = win ? Color.Green : Color.Red,
                 };
 
+                // Compute ELO Delta between Player and opponent
+                var opponentRatings = List<int>;
+                foreach (var userId in opponentIds)
+                {
+                    var player = db.Players.Find(Context.Guild.Id, userId);
+                    if (player == null) continue;
+                    opponentRatings.Add(player.Points);
+                }
+                var opponentAverage = opponentRatings.Sum()/opponentRatings.Count;
+                
+                var playerRatings = List<int>;
+                foreach (var userId in userIds)
+                {
+                    var player = db.Players.Find(Context.Guild.Id, userId);
+                    if (player == null) continue;
+                    playerRatings.Add(player.Points);
+                }
+                var playerAverage = playerRatings.Sum()/playerRatings.Count;
+
+                var expectationToWin = 1 / (1 + Math.Pow(10, (opponentAverage - playerAverage) / 400.0));
+                // Choose EloK. A high number (Such as 32) will mean that Elo will fluctuate rapidly to results. 
+                // A loew EloK (Such as 10) will mean that Elo rankings will be much slower moving.
+                var eloK = 32;
+                var delta = (int)(eloK * ((int)win - expectationToWin));
+
                 var sb = new StringBuilder();
+
                 foreach (var userId in userIds)
                 {
                     var player = db.Players.Find(Context.Guild.Id, userId);
@@ -116,14 +143,12 @@ namespace ELO.Modules
                     //This represents the current user's rank
                     var maxRank = ranks.Where(x => x.Points <= player.Points).OrderByDescending(x => x.Points).FirstOrDefault();
 
-                    int updateVal;
                     RankChangeState state = RankChangeState.None;
                     Rank newRank = null;
 
                     if (win)
                     {
-                        updateVal = maxRank?.WinModifier ?? competition.DefaultWinModifier;
-                        player.Points += updateVal;
+                        player.Points += delta;
                         player.Wins++;
                         newRank = ranks.Where(x => x.Points <= player.Points).OrderByDescending(x => x.Points).FirstOrDefault();
                         if (newRank != null)
@@ -140,14 +165,10 @@ namespace ELO.Modules
                     }
                     else
                     {
-                        //Loss modifier is always positive so subtract it
-                        updateVal = maxRank?.LossModifier ?? competition.DefaultLossModifier;
 
-                        player.Points -= updateVal;
+                        player.Points -= delta;
                         if (!competition.AllowNegativeScore && player.Points < 0) player.Points = 0;
                         player.Losses++;
-                        //Set the update value to a negative value for returning purposes.
-                        updateVal = -Math.Abs(updateVal);
 
                         if (maxRank != null)
                         {
@@ -159,7 +180,7 @@ namespace ELO.Modules
                         }
                     }
 
-                    updates.Add((player, updateVal, maxRank, state, newRank));
+                    updates.Add((player, delta, maxRank, state, newRank));
                     db.Update(player);
 
                     //Ignore user updates if they aren't found in the server.
@@ -176,7 +197,7 @@ namespace ELO.Modules
                         rankUpdate = $" Rank: {oldRoleMention} => {newRoleMention}";
                     }
 
-                    sb.AppendLine($"{gUser.Mention} Points: {player.Points} {(win ? "Added:" : "Removed:")} {updateVal}{rankUpdate}");
+                    sb.AppendLine($"{gUser.Mention} Points: {player.Points} {(win ? "Added:" : "Removed:")} {delta}{rankUpdate}");
                 }
 
                 //Update counter and save new competition config
@@ -188,7 +209,7 @@ namespace ELO.Modules
                 var game = new ManualGameResult
                 {
                     GuildId = Context.Guild.Id,
-                    GameId = count + 1 
+                    GameId = count + 1
                 };
 
                 competition.ManualGameCounter = game.GameId;
